@@ -36,6 +36,14 @@ public class ServerCommand {
 
     public static BrigadierCommand getCommand(ProxyServer server) {
         return new BrigadierCommand(literal("server")
+                .then(literal("lobby")
+                        .executes(context -> {
+                            if (context.getSource() instanceof Player player) {
+                                player.sendMessage(Component.text("Sending you to lobby now!"));
+                                ServerSpinner.getServerManager().lobby(player);
+                            }
+                            return 1;
+                        }))
                 .then(literal("create")
                         .executes(context -> {
                             // Logic for /server create

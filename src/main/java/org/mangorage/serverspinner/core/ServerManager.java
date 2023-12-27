@@ -2,7 +2,8 @@ package org.mangorage.serverspinner.core;
 
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ProxyServer;
-import org.mangorage.serverspinner.core.process.Server;
+import net.kyori.adventure.text.Component;
+import org.mangorage.serverspinner.core.process.MinecraftServer;
 
 import java.nio.file.Path;
 import java.util.Map;
@@ -15,11 +16,10 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class ServerManager {
-    private final Map<String, Server> servers = new ConcurrentHashMap<>();
+    private final Map<String, MinecraftServer> servers = new ConcurrentHashMap<>();
     private final Queue<Runnable> runnables = new ConcurrentLinkedQueue<>();
     private final Random random = new Random();
     private final ProxyServer server;
-
     private boolean running = true;
 
     private final Thread threadWorker = new Thread(() -> {
@@ -27,7 +27,7 @@ public class ServerManager {
         while (running) {
             if (!runnables.isEmpty()) runnables.poll().run();
         }
-    });
+    }, "ServerManager Thread Worker");
 
     private final Thread shutdownThread = new Thread(() -> {
         servers.forEach((id, server) -> server.forceShutdown());
@@ -64,7 +64,7 @@ public class ServerManager {
 
     public void connect(Player player, String playerName) {
         UUID uuid = Util.getUUID(playerName);
-        AtomicReference<Server> pServer = new AtomicReference<>();
+        AtomicReference<MinecraftServer> pServer = new AtomicReference<>();
 
         if (uuid != null) {
             pServer.set(servers.get(playerName));
@@ -74,7 +74,7 @@ public class ServerManager {
             });
         }
 
-        Server playerServer = pServer.get();
+        MinecraftServer playerServer = pServer.get();
         if (playerServer != null) {
             playerServer.sendOver(player, false);
         }
@@ -82,19 +82,34 @@ public class ServerManager {
 
     public void create(Player player) {
         String id = player.getUniqueId().toString();
-        Path instancePath = Constants.INSTANCES.resolve(id + "/");
+        Path instancePath = Constants.getInstances().resolve(id + "/");
 
-        enqueue(() -> {
-            Server Pserver = servers.computeIfAbsent(id, n -> new Server(
-                    id,
-                    Constants.TEMPLATE,
-                    instancePath,
-                    findPort(),
-                    player,
-                    server
-            ));
+        if (!servers.containsKey(id)) {
+            enqueue(() -> {
+                MinecraftServer Pserver = servers.put(id, new MinecraftServer(
+                        id,
+                        Constants.getTemplate(),
+                        instancePath,
+                        findPort(),
+                        player,
+                        server
+                ));
 
-            Pserver.sendOver(player, !Pserver.isRunning());
+                Pserver.sendOver(player, !Pserver.isRunning());
+            });
+        } else {
+            player.sendMessage(Component.text("Already created a server! Cannot create more then 1"));
+        }
+    }
+
+    public void lobby(Player player) {
+        var lobby = server.getServer("lobby");
+        lobby.ifPresentOrElse(server -> {
+            player.createConnectionRequest(server).connect().whenComplete((a, t) -> {
+                a.getReasonComponent().ifPresent(player::sendMessage);
+            });
+        }, () -> {
+            player.sendMessage(Component.text("Unable to send to lobby. lobby server doesn't exist"));
         });
     }
 }

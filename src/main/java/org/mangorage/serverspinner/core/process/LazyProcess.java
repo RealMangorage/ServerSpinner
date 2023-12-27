@@ -65,7 +65,7 @@ public final class LazyProcess {
                 } catch (IOException | InterruptedException e) {
                     throw new RuntimeException(e);
                 }
-            });
+            }, "Server Process [%s] Thread".formatted(id));
             thread.start();
         }
     }

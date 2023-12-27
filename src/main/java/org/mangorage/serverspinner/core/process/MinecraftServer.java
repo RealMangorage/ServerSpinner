@@ -18,12 +18,13 @@ import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-public class Server {
+public class MinecraftServer {
     private final LazyProcess process;
     private final int port;
     private final Path template;
     private final Path instance;
     private final RegisteredServer registeredServer;
+    private boolean deleteExisting = false;
     private boolean running = false;
     private boolean isDone = false;
     private Queue<Player> queue = new ConcurrentLinkedQueue<>();
@@ -36,7 +37,7 @@ public class Server {
         }
     }
 
-    public Server(String id, Path templateDirectory, Path instanceDirectory, int port, Player player, ProxyServer proxyServer) {
+    public MinecraftServer(String id, Path templateDirectory, Path instanceDirectory, int port, Player player, ProxyServer proxyServer) {
         this.process = LazyProcess.create(
                 id,
                 instanceDirectory.toString(),
@@ -65,7 +66,7 @@ public class Server {
         this.port = port;
         this.template = templateDirectory;
         this.instance = instanceDirectory;
-        this.registeredServer = proxyServer.createRawRegisteredServer(new ServerInfo(id, new InetSocketAddress("localhost", port)));
+        this.registeredServer = proxyServer.createRawRegisteredServer(new ServerInfo(id, new InetSocketAddress("0.0.0.0", port)));
         queue.add(player);
         setup();
     }
@@ -75,9 +76,14 @@ public class Server {
     }
 
     public void setup() {
+
         try {
-            deleteDirectory(instance);
-            Util.copyDirectory(template, instance);
+            if (instance.toFile().exists()) {
+                if (deleteExisting) deleteDirectory(instance);
+                Util.copyDirectory(template, instance);
+            } else {
+                Util.copyDirectory(template, instance);
+            }
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
